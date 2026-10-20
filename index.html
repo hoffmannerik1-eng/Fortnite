@@ -40,6 +40,18 @@ canvas{display:block;width:100%;height:100%;cursor:none}
 #lobbySub .cardRow{display:flex;gap:14px;flex-wrap:wrap}
 #lobbySub .card{width:140px;background:#1c1430;border:1px solid #ffffff22;border-radius:8px;padding:14px;text-align:center;font:700 .82rem "Trebuchet MS",sans-serif;opacity:.7}
 #lobbySub .card .ic{font-size:2.2rem;margin-bottom:6px}
+#lobbyPanel #duoLobbyBtn{display:block;background:linear-gradient(100deg,#7c3aed,#2563eb);color:white;border:1px solid #c4b5fd;border-radius:7px;padding:11px 16px;font:900 .9rem "Trebuchet MS",sans-serif;cursor:pointer;box-shadow:0 5px 18px #0005;margin-top:6px;width:100%;text-align:center}
+.lobbyForm{max-width:680px;background:#17102beF;border:1px solid #a78bfa66;border-radius:14px;padding:22px;box-shadow:0 15px 50px #0007}
+.lobbyForm label{display:block;color:#cbbfe0;font-size:.8rem;font-weight:800;margin:12px 0 5px}
+.lobbyHelp{display:block;color:#b9adcf;font-size:.8rem;line-height:1.5;margin:4px 0 10px;padding:8px 10px;background:#0d0a1dcc;border-left:3px solid #8b5cf6;border-radius:0 6px 6px 0}
+.lobbyStep{margin:14px 0 4px}
+.lobbyForm input,.lobbyForm select{box-sizing:border-box;width:100%;padding:12px;border-radius:7px;border:1px solid #7c3aed88;background:#080616;color:#fff;font:700 1rem "Trebuchet MS",sans-serif}
+.lobbyActions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.lobbyActions button{flex:1;min-width:150px;padding:12px;border:1px solid #ffffff44;border-radius:7px;background:#6d28d9;color:#fff;font-weight:900;cursor:pointer}
+.lobbyActions button.secondary{background:#24203a}
+.lobbyStatus{margin-top:14px;padding:12px;border-radius:7px;background:#0a0818;border:1px solid #ffffff22;color:#e9ddff;font-size:.86rem;line-height:1.5}
+.lobbyCode{font-size:1.8rem;letter-spacing:.2em;font-weight:1000;color:#ffe14d}
+@media(max-width:760px){#lobbyTabs{display:none}#lobbyPanel{width:min(390px,94vw);padding:18px}#lobbyHints{display:none}#lobbySub{padding:20px 5vw 76px}#lobbySub h3{font-size:1.3rem}}
 #lobbyBack{position:absolute;left:8vw;bottom:24px;padding:8px 20px;background:#ffffff18;border:1px solid #fff5;border-radius:6px;font:900 .85rem "Trebuchet MS",sans-serif;cursor:pointer}
 #ov.off{display:none}
 #hud{position:absolute;left:12px;top:12px;width:190px;color:#fff;font-size:.85rem;text-shadow:0 1px 2px #000;pointer-events:none}
@@ -143,7 +155,7 @@ canvas{display:block;width:100%;height:100%;cursor:none}
   <div id="lobbyPanel">
     <div id="lobbyTop"><h2 id="t">Mini Royale 3D</h2><p id="s"></p></div>
     <div id="modeCard"><div id="modeIcon">⚔️</div><div><div id="lobbyMode">BATTLE ROYALE</div><div id="lobbyModeSub">▾ Solo</div></div></div>
-    <div id="play">SPIELEN</div>
+    <div id="play">SOLO SPIELEN</div><button id="duoLobbyBtn" type="button">👥 LOBBY / DUO</button>
   </div>
   <div id="lobbyHints">🎯 Zielfernrohr (G) · 🧱 Bauen (E) · 🪜 Treppe (R)<br>🎒 Loot: B zum Aufheben · ⤴️ Springen (C)</div>
 <div id="lobbySub"></div>
@@ -169,22 +181,39 @@ window.addEventListener('unhandledrejection',function(e){
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const T=THREE,BS=4,AR=800,DZ=0,BX=.3,GY=1.6;
-let GFX_Q=2;try{const gq=parseInt(localStorage.getItem('mr3d_gfxQ'));if(gq>=0&&gq<=3)GFX_Q=gq;}catch(e){}
-// Four scalable quality levels; the top mode targets richer shadows, longer view distance and denser vegetation.
-const GFX_PRESETS=[{shadow:512,fogFar:520,treeMul:.25,dpr:1},{shadow:768,fogFar:720,treeMul:.46,dpr:1.2},{shadow:1024,fogFar:850,treeMul:.64,dpr:1.35},{shadow:3072,fogFar:1850,treeMul:1.65,dpr:1.65}];
-function setGfxQ(q){GFX_Q=Math.max(0,Math.min(3,q|0));try{localStorage.setItem('mr3d_gfxQ',GFX_Q);}catch(e){}
+let GFX_Q=2;try{const gq=parseInt(localStorage.getItem('mr3d_gfxQ'));if(gq>=0&&gq<=4)GFX_Q=gq;}catch(e){}
+// Five quality levels. Ultra Max prioritizes image quality over frame rate and device temperature.
+const GFX_PRESETS=[
+  {shadow:512,fogFar:520,treeMul:.25,dpr:1,grass:9000},
+  {shadow:768,fogFar:720,treeMul:.46,dpr:1.2,grass:14000},
+  {shadow:1024,fogFar:1000,treeMul:.64,dpr:1.4,grass:20000},
+  {shadow:3072,fogFar:1850,treeMul:1.65,dpr:1.8,grass:34000},
+  // ULTRA MAX deliberately keeps full resolution and dense geometry instead of adaptive downscaling.
+  {shadow:4096,fogFar:3000,treeMul:2.3,dpr:7.5,grass:52000}
+];
+function targetPixelRatio(){
+  const w=Math.max(1,W||box.clientWidth||innerWidth),h=Math.max(1,H||box.clientHeight||innerHeight);
+  const maxTex=(typeof R!=='undefined'&&R.capabilities)?R.capabilities.maxTextureSize:8192;
+  // ULTRA MAX: up to 7.5x device pixel ratio, capped at 4K canvas bounds and GPU texture limits.
+  return GFX_Q>=4?Math.max(1,Math.min(7.5,3840/w,2160/h,maxTex/w,maxTex/h)):Math.min(devicePixelRatio,GFX_PRESETS[GFX_Q].dpr);
+}
+function setGfxQ(q){GFX_Q=Math.max(0,Math.min(4,q|0));try{localStorage.setItem('mr3d_gfxQ',GFX_Q);}catch(e){}
   const p=GFX_PRESETS[GFX_Q];
-  if(typeof R!=='undefined'){R.setPixelRatio(Math.min(devicePixelRatio,p.dpr));R.setSize(W||box.clientWidth,H||box.clientHeight,false);if(R.shadowMap)R.shadowMap.needsUpdate=true;}
-  if(typeof scene!=='undefined'&&scene.fog)scene.fog.far=p.fogFar;scene.fog.near=GFX_Q===3?520:210;R.toneMappingExposure=GFX_Q===3?1.18:1.08;
-  if(typeof sun!=='undefined'&&sun.shadow){sun.intensity=GFX_Q===3?1.7:1.55;sun.shadow.mapSize.set(p.shadow,p.shadow);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}sun.shadow.needsUpdate=true;}
+  if(typeof R!=='undefined'){R.setPixelRatio(targetPixelRatio());R.setSize(W||box.clientWidth,H||box.clientHeight,false);if(R.shadowMap)R.shadowMap.needsUpdate=true;}
+  if(typeof scene!=='undefined'&&scene.fog){scene.fog.far=p.fogFar;scene.fog.near=GFX_Q>=4?900:GFX_Q>=3?520:210;}
+  if(typeof R!=='undefined')R.toneMappingExposure=GFX_Q>=4?1.48:GFX_Q>=3?1.28:1.12;
+  if(typeof ground!=='undefined'&&ground.material){ground.material.roughness=GFX_Q>=4?.88:.96;ground.material.normalScale.set(GFX_Q>=4?.62:GFX_Q>=3?.45:.34,GFX_Q>=4?.62:GFX_Q>=3?.45:.34);}
+  if(typeof sun!=='undefined'&&sun.shadow){sun.intensity=GFX_Q>=4?2.05:GFX_Q>=3?1.85:1.55;sun.shadow.mapSize.set(p.shadow,p.shadow);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}sun.shadow.needsUpdate=true;}
 }
 
 const $=id=>document.getElementById(id);
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
 const box=$('box'),ov=$('ov'),btns=$('btns'),cross=$('cross'),msg=$('msg');
-const R=new T.WebGLRenderer({antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,GFX_PRESETS[GFX_Q].dpr));
-R.shadowMap.enabled=true;R.shadowMap.type=T.PCFSoftShadowMap;R.outputEncoding=T.sRGBEncoding;
-R.toneMapping=T.ACESFilmicToneMapping;R.toneMappingExposure=1.12;R.physicallyCorrectLights=true;R.domElement.tabIndex=0;R.domElement.style.outline='none';box.prepend(R.domElement);
+const R=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance',precision:'highp'});R.setPixelRatio(GFX_Q>=4?Math.max(1,Math.min(7.5,3840/Math.max(1,box.clientWidth),2160/Math.max(1,box.clientHeight),8192/Math.max(1,box.clientWidth),8192/Math.max(1,box.clientHeight))):Math.min(devicePixelRatio,GFX_PRESETS[GFX_Q].dpr));
+R.shadowMap.enabled=true;R.shadowMap.type=T.PCFSoftShadowMap;R.outputEncoding=T.sRGBEncoding;R.setClearColor(0x9bbbd0,1);R.capabilities.logarithmicDepthBuffer=false;
+R.toneMapping=T.ACESFilmicToneMapping;R.toneMappingExposure=GFX_Q>=4?1.48:GFX_Q>=3?1.28:1.12;
+R.info.autoReset=true;
+R.physicallyCorrectLights=true;R.domElement.tabIndex=0;R.domElement.style.outline='none';box.prepend(R.domElement);
 const scene=new T.Scene();const hz=new T.Color(0x9bbbd0).convertSRGBToLinear();scene.background=hz;scene.fog=new T.Fog(hz,210,GFX_PRESETS[GFX_Q].fogFar);
 const sc=document.createElement('canvas');sc.width=2;sc.height=256;const sg=sc.getContext('2d'),gr=sg.createLinearGradient(0,0,0,256);
 gr.addColorStop(0,'#174b91');gr.addColorStop(.25,'#4389cb');gr.addColorStop(.48,'#9bc9e8');gr.addColorStop(.62,'#d8e8ed');gr.addColorStop(.78,'#e8e4d3');gr.addColorStop(1,'#d9e2ce');sg.fillStyle=gr;sg.fillRect(0,0,2,256);
@@ -201,19 +230,19 @@ muzzle.scale.set(0,0,0);scene.add(muzzle);let muzzleT=0;
 const sunGlow=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(glc),transparent:true,depthWrite:false,blending:T.AdditiveBlending,fog:false}));
 sunGlow.scale.set(260,260,1);sunGlow.position.set(700,420,500);scene.add(sunGlow);
 const cloudMat=new T.MeshBasicMaterial({color:0xfff2dd,fog:false});
-for(let i=0;i<16;i++){const c=new T.Group();for(let j=0;j<4;j++){const q=new T.Mesh(new T.SphereGeometry(8+Math.random()*6,10,8),cloudMat);q.position.set(j*9-14,Math.random()*3,Math.random()*6);q.scale.y=.5;c.add(q);}
+for(let i=0;i<(GFX_Q>=4?34:16);i++){const c=new T.Group();for(let j=0;j<(GFX_Q>=4?9:4);j++){const q=new T.Mesh(new T.SphereGeometry((GFX_Q>=4?12:8)+Math.random()*(GFX_Q>=4?12:6),GFX_Q>=4?16:10,GFX_Q>=4?12:8),cloudMat);q.position.set(j*(GFX_Q>=4?8:9)-14,Math.random()*4,Math.random()*10);q.scale.set(1,.42+Math.random()*.28,1.15);q.castShadow=false;q.receiveShadow=false;c.add(q);}
   const a=Math.random()*6.283,d=800+Math.random()*900;c.position.set(Math.cos(a)*d,120+Math.random()*90,Math.sin(a)*d);scene.add(c);}
 const cam=new T.PerspectiveCamera(65,1,.1,2600);scene.add(cam);
 scene.add(new T.HemisphereLight(0xe5f4ff,0x41462a,1.12));
-const sun=new T.DirectionalLight(0xffe3a5,1.55);sun.castShadow=true;sun.shadow.mapSize.set(GFX_PRESETS[GFX_Q].shadow,GFX_PRESETS[GFX_Q].shadow);
+const sun=new T.DirectionalLight(0xffe3a5,GFX_Q>=4?2.05:GFX_Q>=3?1.85:1.55);sun.castShadow=true;sun.shadow.mapSize.set(GFX_PRESETS[GFX_Q].shadow,GFX_PRESETS[GFX_Q].shadow);
 Object.assign(sun.shadow.camera,{left:-50,right:50,top:50,bottom:-50,near:1,far:200});sun.shadow.bias=-.0004;
 scene.add(sun,sun.target);
 const fill=new T.DirectionalLight(0xb8d4e8,.32);fill.position.set(-40,50,-30);scene.add(fill,fill.target);
 const gc=document.createElement('canvas');gc.width=gc.height=512;const g2=gc.getContext('2d');
 // Seamless-looking ground albedo: no obvious radial gradient or tiny checker-like repetition.
 g2.fillStyle=GFX_Q===3?'#718b3f':'#687d4b';g2.fillRect(0,0,512,512);
-for(let i=0;i<780;i++){const px=Math.random()*512,pz=Math.random()*512,rr=7+Math.random()*42;g2.fillStyle=['rgba(35,67,34,.15)','rgba(130,158,56,.22)','rgba(184,166,81,.14)','rgba(224,205,126,.09)','rgba(71,94,54,.12)'][i%5];g2.beginPath();g2.ellipse(px,pz,rr,rr*(.35+Math.random()*.8),Math.random()*3,0,6.283);g2.fill();}
-for(let i=0;i<3200;i++){const px=Math.random()*512,pz=Math.random()*512;g2.strokeStyle=Math.random()<.55?'rgba(35,68,34,.22)':'rgba(196,198,145,.22)';g2.lineWidth=.45+Math.random()*.8;g2.beginPath();g2.moveTo(px,pz);g2.lineTo(px+(Math.random()-.5)*3,pz-1-Math.random()*5);g2.stroke();}
+for(let i=0;i<(GFX_Q>=4?1800:780);i++){const px=Math.random()*512,pz=Math.random()*512,rr=7+Math.random()*42;g2.fillStyle=['rgba(35,67,34,.15)','rgba(130,158,56,.22)','rgba(184,166,81,.14)','rgba(224,205,126,.09)','rgba(71,94,54,.12)'][i%5];g2.beginPath();g2.ellipse(px,pz,rr,rr*(.35+Math.random()*.8),Math.random()*3,0,6.283);g2.fill();}
+for(let i=0;i<(GFX_Q>=4?10500:3200);i++){const px=Math.random()*512,pz=Math.random()*512;g2.strokeStyle=Math.random()<.55?'rgba(35,68,34,.22)':'rgba(196,198,145,.22)';g2.lineWidth=.45+Math.random()*.8;g2.beginPath();g2.moveTo(px,pz);g2.lineTo(px+(Math.random()-.5)*3,pz-1-Math.random()*5);g2.stroke();}
 for(let i=0;i<160;i++){const px=Math.random()*512,pz=Math.random()*512;g2.fillStyle='rgba(219,211,162,.10)';g2.beginPath();g2.ellipse(px,pz,8+Math.random()*16,3+Math.random()*7,Math.random()*3,0,6.283);g2.fill();}
 const gt=new T.CanvasTexture(gc);gt.wrapS=gt.wrapT=T.RepeatWrapping;gt.repeat.set(11,11);gt.encoding=T.sRGBEncoding;gt.anisotropy=8;
 const gn=document.createElement('canvas');gn.width=gn.height=512;const gnc=gn.getContext('2d');gnc.fillStyle='#8080ff';gnc.fillRect(0,0,512,512);
@@ -446,6 +475,7 @@ const buildGhost=new T.Mesh(new T.BoxGeometry(BS,BS,.4),new T.MeshBasicMaterial(
 buildGhost.visible=false;scene.add(buildGhost);
 const ray=new T.Raycaster(),plane=new T.Plane(new T.Vector3(0,1,0),-GY),hit=new T.Vector3(),ndc=new T.Vector2(),look=new T.Vector3();
 let S,walls=new Map(),stairs=new Map(),chests=[],drops=[],heals=[],bullets=[],bots=[],md=false,scoped=false,running=false,TF=false,TB=false,TS=false,TJ=false,ontouch=false,mx=0,my=0,yaw=0,vy=0,el=.25,vel=.25,W=1,H=1,kb=false,vaultOpened=true,vaultCore=null,buildMode=false;
+let busJumpT=0,busJumpActive=false,busJumpRoll=0;
 let AC=null,SFX_VOL=.5;
 function sfxInit(){if(AC)return;try{AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
 function beep(freq,dur,type,vol,sweepTo){if(!AC)return;const t0=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
@@ -489,7 +519,7 @@ const gx=Math.floor(x/BS),gz=Math.floor(z/BS),key=kk(gx,gz),bx=gx*BS,bz=gz*BS;
   return hgt;}
 function tint(mat,amt){const c=mat.clone();c.color.offsetHSL(0,(Math.random()-.5)*.05,(Math.random()-.5)*amt);return c;}
 function addWall(gx,gz,hp,kind,base=0,dir=0){let m;if(kind!=='wood'&&kind!=='floor')base=terrainHeight(gx*BS+BS/2,gz*BS+BS/2);
-  if(kind==='wood'){const wg=(dir===1||dir===3)?new T.BoxGeometry(.4,BS,BS):new T.BoxGeometry(BS,BS,.4);m=new T.Mesh(wg,Math.random()<.5?woodMat:stoneWallMat);m.position.y=BS/2;}
+  if(kind==='wood'){const wg=(dir===1||dir===3)?new T.BoxGeometry(.4,BS,BS):new T.BoxGeometry(BS,BS,.4);m=new T.Mesh(wg,Math.random()<.5?woodMat:stoneWallMat);m.position.y=BS/2+2.1;}
   else if(kind==='floor'){m=new T.Mesh(new T.BoxGeometry(BS,.4,BS),woodMat);m.position.y=.2;}
   else if(kind==='rock'){m=new T.Mesh(new T.DodecahedronGeometry(2.4+Math.random()*1.2,0),tint(rockMat,.18));m.scale.set(.8+Math.random()*.65,.7+Math.random()*.65,.8+Math.random()*.65);m.position.y=1.7;m.rotation.set((Math.random()-.5)*.25,Math.random()*6,(Math.random()-.5)*.2);}
   else{m=new T.Group();const lm=tint(M(LEAF_PAL[Math.floor(Math.random()*LEAF_PAL.length)]),.08);
@@ -500,7 +530,7 @@ function addWall(gx,gz,hp,kind,base=0,dir=0){let m;if(kind!=='wood'&&kind!=='flo
     else{const tr=new T.Mesh(new T.CylinderGeometry(.35,.5,2.2,8),trunkMat);tr.position.y=1.1;
       const a=new T.Mesh(new T.ConeGeometry(2,3.4,9),lm);a.position.y=3.6;const b2=new T.Mesh(new T.ConeGeometry(1.5,2.6,9),lm);b2.position.y=5.4;m.add(tr,a,b2);}}
   const o=new T.Group();o.add(m);o.position.set(gx*BS+BS/2,base,gz*BS+BS/2);
-  o.traverse(x=>{if(x.isMesh){x.castShadow=true;x.receiveShadow=true;}});scene.add(o);walls.set(kk(gx,gz),{m:o,hp,base,top:base+(kind==='floor'?.4:BS),kind});}
+  o.traverse(x=>{if(x.isMesh){x.castShadow=true;x.receiveShadow=true;}});scene.add(o);walls.set(kk(gx,gz),{m:o,hp,base,top:base+(kind==='floor'?.4:(kind==='wood'?BS+2.1:BS)),kind});}
 function registerSolid(gx,gz,base,top,kind){walls.set(kk(gx,gz),{m:null,hp:1e9,base,top,kind});}
 function addStair(gx,gz,dir,base,hp){const g=new T.Group(),n=8;
   for(let i=0;i<n;i++){const geo=(dir===1||dir===3)?new T.BoxGeometry(BS/n,(i+1)*(BS/n),BS):new T.BoxGeometry(BS,(i+1)*(BS/n),BS/n);
@@ -513,7 +543,10 @@ function addStair(gx,gz,dir,base,hp){const g=new T.Group(),n=8;
   const o=new T.Group();o.add(g);o.position.set(gx*BS+BS/2,base,gz*BS+BS/2);
   o.traverse(x=>{if(x.isMesh){x.castShadow=true;x.receiveShadow=true;}});scene.add(o);
   const key=kk(gx,gz),arr=stairs.get(key)||[];arr.push({m:o,dir,base,hp});stairs.set(key,arr);}
-function blocked(x,z,r,y){for(const a of[-r,r])for(const b2 of[-r,r]){const w=walls.get(kk(Math.floor((x+a)/BS),Math.floor((z+b2)/BS)));if(w&&y<w.top-1.3)return true;}return false;}
+function blocked(x,z,r,y){for(const a of[-r,r])for(const b2 of[-r,r]){const w=walls.get(kk(Math.floor((x+a)/BS),Math.floor((z+b2)/BS)));if(!w)continue;
+    // Gebaute Wände schweben mit genügend Bodenfreiheit: am Boden kann man darunter hindurchlaufen. Beim Springen bleibt die Wand ein Hindernis.
+    if(w.kind==='wood'){if(y>w.base+1.8&&y<w.top-1.3)return true;}
+    else if(y<w.top-1.3)return true;}return false;}
 function mv(e,dx,dz){const ey=e.y||0,nx=cl(e.x+dx,-AR,AR);if(!blocked(nx,e.z,.6,ey))e.x=nx;const nz=cl(e.z+dz,-AR,AR);if(!blocked(e.x,nz,.6,ey))e.z=nz;}
 function hideGameHud(){btns.style.display='none';cross.style.display='none';
   $('bottom').style.display='none';$('chips').style.display='none';$('mini').style.display='none';
@@ -551,11 +584,52 @@ function addCrateAt(x,z,y){const m=makeCrate();m.position.set(x,y,z);addS(m);che
 function gondolaU(t){const Tm=24,Tw=6,P=2*(Tm+Tw),q=t%P;
   if(q<Tw)return 0;if(q<Tw+Tm){const k=(q-Tw)/Tm;return k*k*(3-2*k);}
   if(q<2*Tw+Tm)return 1;const k=(q-2*Tw-Tm)/Tm;return 1-k*k*(3-2*k);}
+// High-detail grass: thousands of individual tapered blades in one instanced draw call.
+// This gives the ground a real blade silhouette instead of relying only on a flat texture.
+let ultraGrass=null;
+function rebuildUltraGrass(){
+  if(ultraGrass){scene.remove(ultraGrass);ultraGrass.geometry.dispose();ultraGrass.material.dispose();ultraGrass=null;}
+  const count=GFX_PRESETS[GFX_Q].grass;
+  const geo=new T.BufferGeometry();
+  const verts=new Float32Array([
+    -.055,0,0,  .055,0,0,  -.038,.28,0,
+     .055,0,0,  .038,.28,0, -.038,.28,0,
+    -.038,.28,0, .038,.28,0, 0,.72,0
+  ]);
+  geo.setAttribute('position',new T.BufferAttribute(verts,3));
+  geo.computeVertexNormals();
+  const mat=new T.MeshStandardMaterial({color:0xffffff,vertexColors:true,side:T.DoubleSide,roughness:.94,metalness:0});
+  ultraGrass=new T.InstancedMesh(geo,mat,count);
+  ultraGrass.frustumCulled=false;
+  ultraGrass.castShadow=GFX_Q>=4;
+  ultraGrass.receiveShadow=false;
+  const dummy=new T.Object3D(),col=new T.Color();
+  const normal=new T.Vector3(),up=new T.Vector3(0,1,0),q=new T.Quaternion(),yawQ=new T.Quaternion();
+  for(let i=0;i<count;i++){
+    // Uniform distribution across the playable land; keep the central island approach clear.
+    const a=Math.random()*Math.PI*2,rad=Math.sqrt(Math.random())*(AR*.94);
+    const x=Math.cos(a)*rad,z=Math.sin(a)*rad;
+    const y=terrainHeight(x,z)+.035;
+    normal.set(-.0055*4.2*Math.cos(x*.0055+1.3)*Math.cos(z*.0065-.4),1,
+      .0065*4.2*Math.sin(x*.0055+1.3)*Math.sin(z*.0065-.4)).normalize();
+    q.setFromUnitVectors(up,normal);yawQ.setFromAxisAngle(up,Math.random()*Math.PI*2);q.multiply(yawQ);
+    const h=.62+Math.random()*1.15,w=.7+Math.random()*.75;
+    dummy.position.set(x,y,z);dummy.quaternion.copy(q);dummy.scale.set(w,h,w);dummy.updateMatrix();
+    ultraGrass.setMatrixAt(i,dummy.matrix);
+    const shade=.72+Math.random()*.48;
+    col.setRGB((.20+Math.random()*.10)*shade,(.34+Math.random()*.22)*shade,(.075+Math.random()*.055)*shade);
+    ultraGrass.setColorAt(i,col);
+  }
+  ultraGrass.instanceMatrix.needsUpdate=true;
+  if(ultraGrass.instanceColor)ultraGrass.instanceColor.needsUpdate=true;
+  scene.add(ultraGrass);
+}
 function reset(){
   for(const o of staticObjs)scene.remove(o);staticObjs.length=0;G=null;MILL=null;treeList.length=0;
   if(window.__grassArr)for(const gt of window.__grassArr)scene.remove(gt);window.__grassArr=[];
-  for(let i=0;i<(GFX_Q===3?1500:GFX_Q===2?650:260);i++){const a=Math.random()*6.283,d=Math.random()*205,gxp=Math.cos(a)*d,gzp=Math.sin(a)*d,tuft=makeGrassTuft();
+  for(let i=0;i<(GFX_Q>=4?3000:GFX_Q===3?1800:GFX_Q===2?650:260);i++){const a=Math.random()*6.283,d=Math.random()*205,gxp=Math.cos(a)*d,gzp=Math.sin(a)*d,tuft=makeGrassTuft();
     tuft.position.set(gxp,terrainHeight(gxp,gzp),gzp);tuft.rotation.y=Math.random()*6.283;scene.add(tuft);window.__grassArr.push(tuft);}
+  rebuildUltraGrass();
   for(const w of walls.values())if(w.m)scene.remove(w.m);walls.clear();
   // Distinct layered low-poly peaks make the mountain biomes readable from a distance.
   // Geometry is shared and kept deliberately modest for mobile performance.
@@ -568,6 +642,16 @@ function reset(){
   // Layered foothills and smaller foreground outcrops create a more natural mountain skyline.
   addRange(AR*.66,-AR*.02,18,235,21);addRange(-AR*.48,-AR*.48,17,226,19);addRange(AR*.12,AR*.57,12,176,16);
   addRange(AR*.12,AR*.57,9,108,29);
+  // High-altitude snow and exposed pale rock catch the sunlight and separate the ridgelines.
+  if(GFX_Q>=3){
+    const snowMat=new T.MeshStandardMaterial({color:0xe8eef0,roughness:.88,metalness:0});
+    const addSnowCap=(x,z,r,h,rot)=>{const y=terrainHeight(x,z);const cap=new T.Mesh(new T.ConeGeometry(r,h,7,2),snowMat);
+      cap.position.set(x,y+h*.48,z);cap.rotation.y=rot;cap.castShadow=true;cap.receiveShadow=true;addS(cap);};
+    for(const c of [[AR*.66,-AR*.02],[ -AR*.48,-AR*.48],[AR*.12,AR*.57]]){
+      for(let i=0;i<(GFX_Q>=4?18:10);i++){const a=i*2.39996,d=18+Math.random()*125,x=c[0]+Math.cos(a)*d,z=c[1]+Math.sin(a)*d;
+        const h=15+Math.random()*30;addSnowCap(x,z,5+Math.random()*12,h,Math.random()*6.28);}
+    }
+  }
   for(const arr of stairs.values())for(const w of arr)scene.remove(w.m);stairs.clear();
   for(const hl of heals)scene.remove(hl.m);heals=[];
   for(const c of chests)scene.remove(c.m);chests.length=0;
@@ -841,7 +925,7 @@ function build(kind){const p=S.p;const ok=canBuild(kind,p);if(!ok)return;
 function updateBuildGhost(p){
   const gx=Math.floor((p.x+p.ax*5)/BS),gz=Math.floor((p.z+p.az*5)/BS);
   const ok=!!canBuild('wood',p);
-  buildGhost.position.set(gx*BS+BS/2,p.y+BS/2,gz*BS+BS/2);
+  buildGhost.position.set(gx*BS+BS/2,p.y+BS/2+2.1,gz*BS+BS/2);
   const dir=nearestDir(p.ax,p.az);buildGhost.rotation.y=(dir===1||dir===3)?Math.PI/2:0;
   buildGhost.material.color.set(ok?0x4ade80:0xef4444);buildGhost.visible=true;
 }
@@ -886,6 +970,9 @@ const SEASON_MS=30*24*3600*1000;
 let TURN_SENS=1;
 try{const tv=parseFloat(localStorage.getItem('mr3d_turnSens'));if(tv>0)TURN_SENS=tv;}catch(e){}
 function setTurnSens(v){TURN_SENS=v;try{localStorage.setItem('mr3d_turnSens',v);}catch(e){}}
+// Lobby-Einstellungen zunächst nur vormerken; anwenden erst beim Start einer Runde.
+let pendingTurnSens=TURN_SENS;
+let pendingGfxQ=GFX_Q;
 let PROG={level:0,kills:0,chests:0,survived:false,skin:0,seasonStart:Date.now(),season:0};
 try{const sv=JSON.parse(localStorage.getItem('mr3d_prog')||'null');if(sv)PROG=Object.assign(PROG,sv);}catch(e){}
 const curSeason=Math.floor((Date.now()-PROG.seasonStart)/SEASON_MS);
@@ -921,13 +1008,15 @@ function update(dt){
   buildGhost.visible=S.phase==='ground';
   if(S.phase==='bus'){
     if(K.Parachute||K.Space||TJ){S.phase='chute';p.x=bus.m.position.x;p.z=bus.m.position.z;p.y=bus.y;p.vy=-2;
-      canopy.visible=true;cross.style.display='block';camD=7.6;toast('Fallschirm geöffnet! Mit WASD steuern.');}
+      busJumpT=0;busJumpActive=true;busJumpRoll=0;
+      canopy.visible=true;cross.style.display='block';camD=18;toast('🚀 ABSprung! Freier Fall – Ä öffnet den Fallschirm.');}
     else{const kx0=(K.ArrowRight?1:0)-(K.ArrowLeft?1:0),ky0=(K.ArrowDown?1:0)-(K.ArrowUp?1:0);
       if(kx0||ky0){yaw-=kx0*1.8*dt;el=cl(el+ky0*1.8*dt,-1.396,1.396);}
       const sm0=1-Math.exp(-22*dt);vy+=(yaw-vy)*sm0;vel+=(el-vel)*sm0;
       camD=55;placeCam({x:bus.m.position.x,y:bus.y-1.8,z:bus.m.position.z});return;}
   }
   // Kamera folgt dem Fadenkreuz: nur ausserhalb der Ruhezone dreht sie sich
+  if(busJumpActive){busJumpT+=dt;busJumpRoll=Math.sin(Math.min(1,busJumpT/1.25)*Math.PI)*0.22;camD=18-10*Math.min(1,busJumpT/1.15);if(busJumpT>1.25){busJumpActive=false;busJumpRoll=0;camD=7.6;}}
   const kx=(K.ArrowRight?1:0)-(K.ArrowLeft?1:0),ky=(K.ArrowDown?1:0)-(K.ArrowUp?1:0);
   if(kx||ky)S.nl=1.2;S.nl=Math.max(0,S.nl-dt);
   let tg=S.tgt;
@@ -964,8 +1053,8 @@ function update(dt){
     if(p.y<=floorY){p.y=floorY;p.vy=0;S.phase='ground';canopy.visible=false;toast('Gelandet!');}
   }else if(p.jump){p.vy-=24*dt;p.y+=p.vy*dt;if(p.y<=floorY){p.y=floorY;p.vy=0;p.jump=false;}}
   else p.y+=(floorY-p.y)*(1-Math.exp(-10*dt));
-  PM.position.set(p.x,p.y,p.z);pf.rotation.y=Math.atan2(p.ax,p.az);ring.position.x=p.x;ring.position.z=p.z;ring.position.y=p.y+.06;
-  const ph=S.t*10;pf.legs[0].rotation.x=moving?Math.sin(ph)*.6:0;pf.legs[1].rotation.x=moving?-Math.sin(ph)*.6:0;
+  PM.position.set(p.x,p.y,p.z);pf.rotation.y=Math.atan2(p.ax,p.az);pf.rotation.z=busJumpRoll;ring.position.x=p.x;ring.position.z=p.z;ring.position.y=p.y+.06;
+  const ph=S.t*10;pf.legs[0].rotation.x=busJumpActive?-.48:(moving?Math.sin(ph)*.6:0);pf.legs[1].rotation.x=busJumpActive?-.48:(moving?-Math.sin(ph)*.6:0);if(busJumpActive){pf.arms[0].rotation.z=-.8;pf.arms[1].rotation.z=.8;}else{pf.arms[0].rotation.z=0;pf.arms[1].rotation.z=0;}
   sun.position.set(p.x+35,70,p.z+25);sun.target.position.set(p.x,0,p.z);if(MILL)MILL.rotation.z+=dt*.6;
   p.cd-=dt;p.bcd-=dt;p.wood=Math.min(1000,p.wood+.5*dt);
   if(S.phase==='ground'){
@@ -1059,8 +1148,6 @@ function update(dt){
 let toastT=0;function toast(t){$('toast').textContent=t;$('toast').classList.add('show');toastT=2.4;}
 function pop(html){msg.innerHTML=html;msg.style.animation='none';void msg.offsetWidth;msg.style.animation='pop .4s ease-out';}
 function endRound(win){
-  // Sehr hohe Grafik gilt nur für diese Runde; danach automatisch auf Hoch zurückstellen.
-  if(GFX_Q===3)setGfxQ(2);
   S.state=win?'win':'lose';running=false;btns.style.display='none';md=false;TF=false;TB=false;
   const next=win?'Nächste Runde in ':'Zurück zur Lobby in ';let n=3;
   const txt=()=>win
@@ -1075,7 +1162,11 @@ function endRound(win){
     if(win)start();else show('Mini Royale 3D',SHORT_TXT);
   },1000);
 }
-function start(){if(running)return;sfxInit();if(S.state!=='play')reset();running=true;ov.classList.add('off');
+function start(){if(running)return;
+  // Einstellungen erst beim tatsächlichen Klick auf SPIELEN übernehmen.
+  setTurnSens(pendingTurnSens);
+  if(GFX_Q!==pendingGfxQ)setGfxQ(pendingGfxQ);
+  sfxInit();if(S.state!=='play')reset();running=true;ov.classList.add('off');
   buildMode=false;$('modeBadge').textContent='🎯 KAMPFMODUS';$('modeBadge').classList.remove('bm');
   btns.style.display='flex';showGameHud();R.domElement.focus();
   msg.style.animation='none';msg.textContent='LOS!';setTimeout(()=>{if(running)msg.textContent='';},1200);}
@@ -1091,9 +1182,9 @@ function loop(now){
   if(now-fpsStamp>=500){const fps=Math.round(fpsFrames*1000/(now-fpsStamp));$('fpsCounter').textContent='FPS: '+fps;fpsFrames=0;fpsStamp=now;}
   const dt=Math.min(.05,(now-last)/1000);last=now;
   dprT+=dt;dprAccum+=dt;dprFrames++;
-  if(dprT>1.5){const avgFrame=dprAccum/dprFrames,maxDpr=Math.min(devicePixelRatio,GFX_PRESETS[GFX_Q].dpr);
-    if(avgFrame>.03&&dprCur>.75){dprCur=Math.max(.75,dprCur-.1);R.setPixelRatio(dprCur);R.setSize(W,H,false);}
-    else if(avgFrame<.018&&dprCur<maxDpr){dprCur=Math.min(maxDpr,dprCur+.15);R.setPixelRatio(dprCur);R.setSize(W,H,false);}
+  if(dprT>1.5){const avgFrame=dprAccum/dprFrames,maxDpr=targetPixelRatio();
+    if(GFX_Q<4){if(avgFrame>.03&&dprCur>.75){dprCur=Math.max(.75,dprCur-.1);R.setPixelRatio(dprCur);R.setSize(W,H,false);}
+    else if(avgFrame<.018&&dprCur<maxDpr){dprCur=Math.min(maxDpr,dprCur+.15);R.setPixelRatio(dprCur);R.setSize(W,H,false);}}else if(Math.abs(dprCur-maxDpr)>.01){dprCur=maxDpr;R.setPixelRatio(dprCur);R.setSize(W,H,false);}
     dprT=0;dprAccum=0;dprFrames=0;}
   if(S.state==='play'&&running)update(dt);
   $('hp').style.width=(S.p.hp/2)+'%';$('hpn').textContent=Math.ceil(S.p.hp);$('wn').textContent=Math.floor(S.p.wood);
@@ -1168,7 +1259,42 @@ function drawMini(){
 reset();S.state='menu';
 const SHORT_TXT='Bereit? Drücke SPIELEN. Tastenerklärung: Tab „❓ ERKLÄRUNG" oben.';
 show('Mini Royale 3D',SHORT_TXT);
-$('play').addEventListener('click',start);
+$('play').addEventListener('click',()=>{MATCH_MODE='solo';start();});
+let MATCH_MODE='solo',PLAYER_NAME='',CURRENT_LOBBY_CODE='';
+function showDuoLobby(){
+  $('lobbyPanel').style.display='none';
+  for(const el2 of document.querySelectorAll('#lobbyTabs span'))el2.classList.toggle('on',false);
+  $('lobbySub').innerHTML=`<h3>👥 ONLINE-LOBBY & DUO</h3>
+  <div class="lobbyForm">
+    <p style="color:#e9ddff;margin:0 0 8px">Erstelle eine Lobby für Freunde oder tritt mit einem Code bei. Wähle Duo, um als Team aus zwei Spielern anzutreten.</p>
+    <div class="lobbyStep"><label for="playerNameInput">1. DEIN BENUTZERNAME</label><input id="playerNameInput" maxlength="18" autocomplete="nickname" placeholder="z. B. ShadowPlayer" value="${escapeLobbyText(PLAYER_NAME)}"><small class="lobbyHelp">Gib den Namen ein, unter dem deine Freunde dich in der Lobby erkennen. Der Name darf bis zu 18 Zeichen lang sein.</small></div>
+    <div class="lobbyStep"><label for="duoModeSelect">2. SPIELMODUS AUSWÄHLEN</label><select id="duoModeSelect"><option value="duo">Duo – 2 Spieler pro Team</option><option value="solo">Solo – jeder gegen jeden</option></select><small class="lobbyHelp"><b>Duo:</b> Du spielst mit einem Teampartner gegen andere Teams. <b>Solo:</b> Jeder kämpft allein. Die Auswahl wird hier vorgemerkt; echte gemeinsame Online-Runden benötigen noch einen Multiplayer-Server.</small></div>
+    <div class="lobbyStep"><label for="lobbyCodeInput">3. LOBBY-CODE (zum Beitreten)</label><input id="lobbyCodeInput" maxlength="8" autocomplete="off" placeholder="z. B. A7K9Q2" value="${escapeLobbyText(CURRENT_LOBBY_CODE)}" style="text-transform:uppercase"><small class="lobbyHelp">Wenn ein Freund eine Lobby erstellt hat, lass dir seinen Code schicken und trage ihn hier ein. Wenn du selbst eine Lobby erstellst, wird der neue Code hier angezeigt.</small></div>
+    <div class="lobbyActions"><button id="createLobbyBtn">＋ LOBBY ERSTELLEN</button><button id="joinLobbyBtn" class="secondary">↗ CODE BEITRETEN</button></div>
+    <small class="lobbyHelp"><b>4. Lobby erstellen:</b> Speichert deinen Namen und Modus und erzeugt einen Code, den du teilen kannst. <b>Code beitreten:</b> Versucht, mit deinem Namen und dem eingegebenen Code beizutreten. Im aktuellen Stand wird der Code noch nicht online geprüft, da der Multiplayer-Server noch fehlt.</small>
+    <div id="lobbyStatus" class="lobbyStatus">⚠️ Lobby-Menü bereit. Für echte Online-Spieler muss die Website noch mit einem Multiplayer-Server verbunden werden. Ohne Server sind Codes nur lokal und funktionieren nicht zwischen Geräten.</div>
+  </div><div id="lobbyBack">← Zurück</div>`;
+  $('lobbySub').style.display='block';
+  $('lobbyBack').addEventListener('click',()=>{ $('lobbySub').style.display='none';$('lobbyPanel').style.display='flex';showTab('play'); });
+  $('createLobbyBtn').addEventListener('click',()=>{
+    const name=$('playerNameInput').value.trim();
+    if(!name){$('lobbyStatus').textContent='Bitte gib zuerst einen Benutzernamen ein.';return;}
+    PLAYER_NAME=name;MATCH_MODE=$('duoModeSelect').value;
+    CURRENT_LOBBY_CODE=Math.random().toString(36).slice(2,8).toUpperCase();
+    $('lobbyCodeInput').value=CURRENT_LOBBY_CODE;
+    $('lobbyStatus').innerHTML='Lobby lokal vorbereitet für <b>'+escapeLobbyText(name)+'</b> · Modus: <b>'+(MATCH_MODE==='duo'?'Duo':'Solo')+'</b><br>Dein Code: <div class="lobbyCode">'+CURRENT_LOBBY_CODE+'</div><button id="copyLobbyCodeBtn" class="secondary" style="width:100%;margin-top:8px">CODE KOPIEREN</button><br><br>⚠️ Das ist aktuell nur eine lokale Vorschau. Damit Freunde über das Internet beitreten können und gemeinsam in derselben Runde spielen, muss als nächster Schritt ein Multiplayer-Backend verbunden werden.';
+    $('copyLobbyCodeBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(CURRENT_LOBBY_CODE);$('copyLobbyCodeBtn').textContent='KOPIERT ✓';}catch(e){$('lobbyStatus').insertAdjacentHTML('beforeend','<br>Markiere den Code und kopiere ihn manuell.');}});
+  });
+  $('joinLobbyBtn').addEventListener('click',()=>{
+    const name=$('playerNameInput').value.trim(),code=$('lobbyCodeInput').value.trim().toUpperCase();
+    if(!name){$('lobbyStatus').textContent='Bitte gib zuerst einen Benutzernamen ein.';return;}
+    if(code.length<4){$('lobbyStatus').textContent='Bitte gib einen gültigen Lobby-Code ein.';return;}
+    PLAYER_NAME=name;CURRENT_LOBBY_CODE=code;MATCH_MODE=$('duoModeSelect').value;
+    $('lobbyStatus').innerHTML='Du möchtest als <b>'+escapeLobbyText(name)+'</b> der Lobby <b class="lobbyCode">'+escapeLobbyText(code)+'</b> im Modus <b>'+(MATCH_MODE==='duo'?'Duo':'Solo')+'</b> beitreten.<br><br>⚠️ Der Code kann noch nicht online geprüft werden, weil noch kein Multiplayer-Server verbunden ist. Es wurde kein anderer Spieler beigetreten.';
+  });
+}
+function escapeLobbyText(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+$('duoLobbyBtn').addEventListener('click',showDuoLobby);
 const TAB_HTML={
   locker:()=>{let h='<h3>🎭 Spind</h3><div class="cardRow">';
     SKINS.forEach((sk,i)=>{const unlocked=i<=PROG.level,eq=i===PROG.skin;
@@ -1185,16 +1311,16 @@ const TAB_HTML={
     +'<p class="muted">Schließt du alle drei ab, steigst du eine Battle-Pass-Stufe auf und schaltest einen neuen Skin frei.</p>';},
   rank:'<h3>🏆 Rangliste</h3><div class="row"><b>#1</b> Du – 0 Siege</div><p class="muted">Spiele Runden, um hier aufzusteigen.</p>',
   settings:()=>'<h3>⚙️ Einstellungen</h3><div class="row" style="flex-direction:column;align-items:flex-start;gap:8px"><b>Dreh-Geschwindigkeit (Maus &amp; Pfeiltasten)</b>'
-    +'<input id="turnSlider" type="range" min="0.3" max="2.5" step="0.05" value="'+TURN_SENS+'" style="width:260px">'
-    +'<span id="turnVal">'+TURN_SENS.toFixed(2)+'×</span></div><p class="muted">Wird sofort angewendet und gespeichert.</p>'
+    +'<input id="turnSlider" type="range" min="0.3" max="2.5" step="0.05" value="'+pendingTurnSens+'" style="width:260px">'
+    +'<span id="turnVal">'+pendingTurnSens.toFixed(2)+'×</span></div><p class="muted">Wird erst angewendet, wenn du auf SPIELEN klickst.</p>'
     +'<div class="row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:10px"><b>Grafikqualität</b><div class="cardRow">'
-    +[0,1,2,3].map(q=>'<div class="card qCard'+(q===GFX_Q?' eq':'')+'" data-q="'+q+'" style="cursor:pointer;'+(q===GFX_Q?'border-color:#ffe14d':'')+'"><div class="ic">'+['🔋','⚖️','✨','🌄'][q]+'</div>'+['Niedrig','Mittel','Hoch','Sehr hohe Grafik'][q]+(q===GFX_Q?'<br><small style="color:#4ade80">Aktiv</small>':'')+'</div>').join('')
-    +'</div></div><p class="muted">Sehr hohe Grafik orientiert sich an der Referenz: kräftigere Farben, deutlich bessere Schatten, größere Sichtweite und dichtere Vegetation. Die Änderungen an der Weltobjekt-Anzahl werden ab der nächsten Runde sichtbar; Auflösung und Schatten werden direkt angepasst. Auf älteren Geräten kann dieser Modus langsamer laufen.</p>',
-  help:'<h3>❓ Erklärung</h3><div class="row"><b>WASD</b> Bewegen</div><div class="row"><b>Maus / Pfeiltasten</b> Umschauen – Fadenkreuz bleibt in der Mitte</div><div class="row"><b>V / Klick</b> Schießen</div><div class="row"><b>1–6 / X</b> Waffe wechseln</div><div class="row"><b>G</b> Zielfernrohr (Sniper & Mythos-SMG)</div><div class="row"><b>E</b> Wand bauen</div><div class="row"><b>R</b> Treppe bauen (stapelbar)</div><div class="row"><b>F / Q</b> Boden bauen (dünne Plattform), auch auf Treppen oder im Sprung</div><div class="row"><b>C</b> Springen</div><div class="row"><b>B</b> Waffe/Item vom Boden aufheben</div><div class="row"><b>Ä</b> Fallschirm öffnen / aus dem Battle Bus abspringen</div><div class="row"><b>L</b> Fallschirm schließen oder während des Falls wieder öffnen</div><div class="row"><b>Leertaste</b> Alternative zum Absprung<div class="row"><b>Esc</b> Pause</div><p class="muted">Der Bus fliegt 10 Sekunden über die Karte. Bleib im Sturmkreis, er schließt sich nach 6 Minuten. Jeder kämpft gegen jeden. Gewinnst du, geht es direkt in die nächste Runde; scheidest du aus, zurück in die Lobby.</p>',
+    +[0,1,2,3,4].map(q=>'<div class="card qCard'+(q===pendingGfxQ?' eq':'')+'" data-q="'+q+'" style="cursor:pointer;'+(q===pendingGfxQ?'border-color:#ffe14d':'')+'"><div class="ic">'+['🔋','⚖️','✨','🌄','🔥'][q]+'</div>'+['Niedrig','Mittel','Hoch','Sehr hohe Grafik','ULTRA MAX'][q]+(q===pendingGfxQ?'<br><small style="color:#4ade80">Ausgewählt</small>':'')+'</div>').join('')
+    +'</div></div><p class="muted">ULTRA MAX: bis zu 7,5× Pixel-Skalierung, auf maximal 4K (3840×2160) und die Grenzen der Grafikkarte begrenzt; 4K-Schattenkarte, hellere Beleuchtung, sehr große Sichtweite, bis zu 52.000 einzelne Grashalme, dichtere Wolken und Schnee auf hohen Gipfeln. Die Auflösung wird bei niedrigen FPS nicht automatisch reduziert. Das kann extrem ruckeln, das Gerät erhitzen oder den Browser abstürzen lassen. Weltobjekte werden ab der nächsten Runde neu aufgebaut.</p>',
+  help:'<h3>❓ Erklärung</h3><div class="row"><b>WASD</b> Bewegen</div><div class="row"><b>Maus / Pfeiltasten</b> Umschauen – Fadenkreuz bleibt in der Mitte</div><div class="row"><b>V / Klick</b> Schießen</div><div class="row"><b>1–6 / X</b> Waffe wechseln</div><div class="row"><b>G</b> Zielfernrohr (Sniper & Mythos-SMG)</div><div class="row"><b>E</b> Wand bauen (grüne Vorschau = gültiger Platz; unter Wänden ist Bodenfreiheit)</div><div class="row"><b>R</b> Treppe bauen (stapelbar)</div><div class="row"><b>F / Q</b> Boden bauen (dünne Plattform), auch auf Treppen oder im Sprung</div><div class="row"><b>C</b> Springen</div><div class="row"><b>B</b> Waffe/Item vom Boden aufheben</div><div class="row"><b>Ä</b> Fallschirm öffnen / aus dem Battle Bus abspringen</div><div class="row"><b>L</b> Fallschirm schließen oder während des Falls wieder öffnen</div><div class="row"><b>Leertaste</b> Alternative zum Absprung<div class="row"><b>Esc</b> Pause</div><p class="muted">Der Bus fliegt 10 Sekunden über die Karte. Bleib im Sturmkreis, er schließt sich nach 6 Minuten. Jeder kämpft gegen jeden. Gewinnst du, geht es direkt in die nächste Runde; scheidest du aus, zurück in die Lobby.</p>',
 };
 function showTab(tab){
   for(const el2 of document.querySelectorAll('#lobbyTabs span'))el2.classList.toggle('on',el2.dataset.tab===tab);
-  if(tab==='play'){if(GFX_Q===3)setGfxQ(2);$('lobbySub').style.display='none';$('lobbyPanel').style.display='flex';return;}
+  if(tab==='play'){$('lobbySub').style.display='none';$('lobbyPanel').style.display='flex';return;}
   $('lobbyPanel').style.display='none';
   const content=TAB_HTML[tab];
   $('lobbySub').innerHTML=(typeof content==='function'?content():content)+'<div id="lobbyBack">← Zurück</div>';
@@ -1203,8 +1329,8 @@ function showTab(tab){
   if(tab==='locker')for(const c of document.querySelectorAll('.skinCard'))c.addEventListener('click',()=>{
     const i=+c.dataset.skin;if(i>PROG.level)return;PROG.skin=i;applySkin();saveProg();showTab('locker');
   });
-  if(tab==='settings'){const sl=$('turnSlider');sl.addEventListener('input',()=>{setTurnSens(+sl.value);$('turnVal').textContent=(+sl.value).toFixed(2)+'×';});
-    for(const c of document.querySelectorAll('.qCard'))c.addEventListener('click',()=>{setGfxQ(+c.dataset.q);toast(+c.dataset.q===3?'Sehr hohe Grafik für diese Runde aktiviert. Danach geht es automatisch zurück auf Hoch.':'Grafikqualität eingestellt.');showTab('settings');});}
+  if(tab==='settings'){const sl=$('turnSlider');sl.addEventListener('input',()=>{pendingTurnSens=+sl.value;$('turnVal').textContent=pendingTurnSens.toFixed(2)+'×';});
+    for(const c of document.querySelectorAll('.qCard'))c.addEventListener('click',()=>{pendingGfxQ=+c.dataset.q;showTab('settings');});}
 }
 for(const el2 of document.querySelectorAll('#lobbyTabs span'))el2.addEventListener('click',()=>showTab(el2.dataset.tab));
 applySkin();
